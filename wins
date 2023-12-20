@@ -1,0 +1,3 @@
+conda env config vars set PYTHONPATH=D:\PythonProjects\SAT\
+conda env config vars set TORCH_EXTENSIONS_DIR=D:\PythonProjects\SAT\tmp
+conda env config vars set TORCH_HOME=D:\PythonProjects\SAT\cache
