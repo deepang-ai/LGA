@@ -347,6 +347,7 @@ class TransformerEncoderLayer(nn.TransformerEncoderLayer):
             self.norm1 = nn.BatchNorm1d(d_model)
             self.norm2 = nn.BatchNorm1d(d_model)
 
+
     def forward(self, x, edge_index, complete_edge_index,
             subgraph_node_index=None, subgraph_edge_index=None,
             subgraph_edge_attr=None,
@@ -379,6 +380,7 @@ class TransformerEncoderLayer(nn.TransformerEncoderLayer):
         else:
             x = self.norm1(x)
         x2 = self.linear2(self.dropout(self.activation(self.linear1(x))))
+        # x2 = self.linear2(self.activation(self.linear1(x)))
         x = x + self.dropout2(x2)
 
         if not self.pre_norm:

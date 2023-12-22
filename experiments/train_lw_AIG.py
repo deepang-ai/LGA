@@ -359,7 +359,7 @@ def main():
             model = GraphTransformer(in_size=input_size,
                                      num_class=dataset.num_classes,
                                      d_model=args.dim_hidden,
-                                     dim_feedforward=2 * args.dim_hidden,
+                                     dim_feedforward=int(0.5 * args.dim_hidden),
                                      dropout=args.dropout,
                                      num_heads=args.num_heads,
                                      num_layers=args.num_layers,
