@@ -2,6 +2,8 @@
 import os
 import sys
 
+
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import copy
@@ -33,6 +35,8 @@ from utils import ColumnNormalizeFeatures
 from utils import EarlyStopping
 import torch_geometric.transforms as T
 
+
+from sklearn.metrics import  f1_score
 from transform import Augmentor_Transform
 def load_args():
     parser = argparse.ArgumentParser(
@@ -40,7 +44,7 @@ def load_args():
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     # parser.add_argument('--seed', type=int, default=0,
     #                     help='random seed')
-    parser.add_argument('--dataset', type=str, default="ico_wallets/averVolume",
+    parser.add_argument('--dataset', type=str, default="mining/averVolume",
                         help='name of dataset')
     parser.add_argument('--num-heads', type=int, default=8, help="number of heads")
     parser.add_argument('--num-layers', type=int, default=3, help="number of layers")
@@ -53,10 +57,6 @@ def load_args():
     parser.add_argument('--weight-decay', type=float, default=1e-4, help='weight decay')
     parser.add_argument('--batch-size', type=int, default=32,
                         help='batch size')
-    parser.add_argument('--act_func', type=str, help='activation function', default='relu',
-                        choices=ACT_FUNC.keys())
-    parser.add_argument('--trans_act_func', type=str, help='transformer activation function', default='relu',
-                        choices=['relu', 'gelu'])
     parser.add_argument('--abs-pe', type=str, default=None, choices=POSENCODINGS.keys(),
                         help='which absolute PE to use?')
     parser.add_argument('--abs-pe-dim', type=int, default=20, help='dimension for absolute PE')
@@ -166,7 +166,6 @@ def train_epoch(model, loader, criterion, optimizer, lr_scheduler, epoch, use_cu
     for i, data in enumerate(loader):
 
         data_v1, data_v2, data_raw = data
-
         # size = len(data_v1.y)
         if epoch < args.warmup:
             iteration = epoch * len(loader) + i
@@ -174,13 +173,22 @@ def train_epoch(model, loader, criterion, optimizer, lr_scheduler, epoch, use_cu
                 param_group["lr"] = lr_scheduler(iteration)
         if args.abs_pe == 'lap':
             # sign flip as in Bresson et al. for laplacian PE
-            sign_flip = torch.rand(data.abs_pe.shape[-1])
+            sign_flip = torch.rand(data_v1.abs_pe.shape[-1])
             sign_flip[sign_flip >= 0.5] = 1.0
             sign_flip[sign_flip < 0.5] = -1.0
-            data.abs_pe = data.abs_pe * sign_flip.unsqueeze(0)
-
-        if use_cuda:
-            data = data.cuda()
+            data_v1.abs_pe = data_v1.abs_pe * sign_flip.unsqueeze(0)
+            # sign flip as in Bresson et al. for laplacian PE
+            sign_flip = torch.rand(data_v2.abs_pe.shape[-1])
+            sign_flip[sign_flip >= 0.5] = 1.0
+            sign_flip[sign_flip < 0.5] = -1.0
+            data_v2.abs_pe = data_v2.abs_pe * sign_flip.unsqueeze(0)
+            # sign flip as in Bresson et al. for laplacian PE
+            sign_flip = torch.rand(data_raw.abs_pe.shape[-1])
+            sign_flip[sign_flip >= 0.5] = 1.0
+            sign_flip[sign_flip < 0.5] = -1.0
+            data_raw.abs_pe = data_raw.abs_pe * sign_flip.unsqueeze(0)
+        # if use_cuda:
+        #     data = data.cuda()
 
         optimizer.zero_grad()
         node_reps_v1, graph_reps_v1, pred_out_v1 = model(data_v1)
@@ -246,8 +254,11 @@ def eval_epoch(model, loader, criterion, use_cuda=False, split='Val'):
     n_sample = len(loader.dataset)
     epoch_loss = running_loss / n_sample
     evaluator = Evaluator(name=args.dataset)
-    score = evaluator.eval({'y_pred': y_pred,
-                            'y_true': y_true})['acc']
+
+    score = f1_score(y_true=y_true, y_pred=y_pred, average='micro')
+
+    # score = evaluator.eval({'y_true': [y_true],
+    #                         'y_pred': [y_pred]})['acc']
     print('{} loss: {:.4f} score: {:.4f} time: {:.2f}s'.format(
         split, epoch_loss, score, toc - tic))
     return score, epoch_loss
@@ -318,9 +329,8 @@ def main():
                                               Y=np.array([dataset[i].y.item() for i in range(len(dataset))]),
                                               seed=seeds[t], K=args.k_ford, k_idx=k, dataset=args.dataset)
 
-            train_dset = GraphDataset(dataset[split_idx['train']], degree=True,
-                                      k_hop=args.k_hop, se=args.se, use_subgraph_edge_attr=args.use_edge_attr,
-                                      return_complete_index=False)
+
+
 
             train_dset_aug1 = GraphDataset(dataset_aug1[split_idx['train']], degree=True,
                                       k_hop=args.k_hop, se=args.se, use_subgraph_edge_attr=args.use_edge_attr,
@@ -329,9 +339,13 @@ def main():
                                       k_hop=args.k_hop, se=args.se, use_subgraph_edge_attr=args.use_edge_attr,
                                       return_complete_index=False)
 
+            train_dset = GraphDataset(dataset[split_idx['train']], degree=True,
+                                      k_hop=args.k_hop, se=args.se, use_subgraph_edge_attr=args.use_edge_attr,
+                                      return_complete_index=False)
 
             train_loader = DataLoader(list(zip(train_dset_aug1, train_dset_aug2, train_dset)), batch_size=args.batch_size, shuffle=True)
-            print(train_dset[0])
+
+
             # Data(edge_index=[2, 4408], edge_attr=[4408, 7], y=[1, 1], num_nodes=300, x=[300, 7], degree=[300])
             ##
 
@@ -348,6 +362,8 @@ def main():
                 abs_pe_encoder = abs_pe_method(args.abs_pe_dim, normalization='sym')
                 if abs_pe_encoder is not None:
                     abs_pe_encoder.apply_to(train_dset)
+                    abs_pe_encoder.apply_to(train_dset_aug1)
+                    abs_pe_encoder.apply_to(train_dset_aug2)
                     abs_pe_encoder.apply_to(val_dset)
 
             if 'pna' in args.gnn_type or args.gnn_type == 'mpnn':
@@ -359,7 +375,7 @@ def main():
             model = GraphTransformer(in_size=input_size,
                                      num_class=dataset.num_classes,
                                      d_model=args.dim_hidden,
-                                     dim_feedforward=int(0.5 * args.dim_hidden),
+                                     dim_feedforward=int(2 * args.dim_hidden),
                                      dropout=args.dropout,
                                      num_heads=args.num_heads,
                                      num_layers=args.num_layers,
@@ -373,14 +389,15 @@ def main():
                                      edge_dim=args.edge_dim,
                                      se=args.se,
                                      deg=deg,
+
+
                                      in_embed=False,
                                      edge_embed=False,
                                      global_pool=args.global_pool,
-                                     act_func=ACT_FUNC[args.act_func],
-                                     trans_act_func=args.trans_act_func
                                      )
             print(model)
             if args.use_cuda:
+
                 model.cuda()
             print("Total number of parameters: {}".format(count_parameters(model)))
 
@@ -400,6 +417,8 @@ def main():
                                      k_hop=args.k_hop, se=args.se, use_subgraph_edge_attr=args.use_edge_attr,
                                      return_complete_index=False)
             test_loader = DataLoader(test_dset, batch_size=args.batch_size, shuffle=False)
+
+            print(test_loader)
 
 
 

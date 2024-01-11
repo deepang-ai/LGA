@@ -5,7 +5,9 @@ import torch_geometric.nn as gnn
 from torch_geometric.nn import GATConv
 from .layers import TransformerEncoderLayer
 from einops import repeat
-from .utils import global_max_pool
+# from .utils import global_max_pool
+
+from torch_geometric.nn import global_max_pool
 
 class GraphTransformerEncoder(nn.TransformerEncoder):
     def forward(self, x, edge_index, complete_edge_index,
@@ -28,47 +30,25 @@ class GraphTransformerEncoder(nn.TransformerEncoder):
             output = self.norm(output)
         return output + x
 
-
-
-    # model = GraphTransformer(in_size=input_size,
-    #                          num_class=dataset.num_classes,
-    #                          d_model=args.dim_hidden,
-    #                          dim_feedforward=2 * args.dim_hidden,
-    #                          dropout=args.dropout,
-    #                          num_heads=args.num_heads,
-    #                          num_layers=args.num_layers,
-    #                          batch_norm=args.batch_norm,
-    #                          abs_pe=args.abs_pe,                      #None
-    #                          abs_pe_dim=args.abs_pe_dim,              #20
-    #                          gnn_type=args.gnn_type,
-    #                          k_hop=args.k_hop,
-    #                          use_edge_attr=args.use_edge_attr,
-    #                          num_edge_features=num_edge_features,
-    #                          edge_dim=args.edge_dim,
-    #                          se=args.se,
-    #                          deg=deg,
-    #                          in_embed=False,
-    #                          edge_embed=False,
-    #                          global_pool=args.global_pool)
-
-
-
 class GraphTransformer(nn.Module):
     def __init__(self, in_size, num_class, d_model, num_heads=8,
                  dim_feedforward=512, dropout=0.0, num_layers=4,
                  batch_norm=False, abs_pe=False, abs_pe_dim=0,
                  gnn_type="graph", se="gnn", use_edge_attr=False, num_edge_features=4,
                  in_embed=True, edge_embed=True, use_global_pool=True, max_seq_len=None,
-                 global_pool='mean', act_func=nn.ReLU, trans_act_func='relu',**kwargs):
+                 global_pool='mean', **kwargs):
         super().__init__()
+
+
 
         self.d_model = d_model
         self.in_size = in_size
         self.num_heads = num_heads
         self.dim_feedforward = dim_feedforward
         self.dropout = dropout
-        self.act_func = act_func
 
+        self.subgraph_conv = GATConv(d_model, d_model, dropout=dropout,
+                                     add_self_loops=True, negative_slope=0.01)
 
         self.abs_pe = abs_pe
         self.abs_pe_dim = abs_pe_dim
@@ -100,14 +80,10 @@ class GraphTransformer(nn.Module):
         else:
             kwargs['edge_dim'] = None
 
-        self.subgraph_conv = GATConv(in_size, d_model, dropout=dropout,
-                                     add_self_loops=True, negative_slope=0.01)
-
-
         self.gnn_type = gnn_type
         self.se = se
         encoder_layer = TransformerEncoderLayer(
-            d_model, num_heads, dim_feedforward, dropout, act_func=act_func, trans_act_func=trans_act_func, batch_norm=batch_norm,
+            d_model, num_heads, dim_feedforward, dropout, batch_norm=batch_norm,
             gnn_type=gnn_type, se=se, **kwargs)
         self.encoder = GraphTransformerEncoder(encoder_layer, num_layers)
         self.global_pool = global_pool
@@ -119,7 +95,7 @@ class GraphTransformer(nn.Module):
             self.cls_token = nn.Parameter(torch.randn(1, d_model))
             self.pooling = None
         elif global_pool == 'gat':
-            self.pooling = gnn.global_max_pool
+            self.pooling = global_max_pool
         self.use_global_pool = use_global_pool
 
         self.max_seq_len = max_seq_len
@@ -202,12 +178,13 @@ class GraphTransformer(nn.Module):
         if self.use_global_pool:
             if self.global_pool == 'cls':
                 graph_reps = node_reps[-bsz:]
+
             elif self.global_pool == 'gat':
                 # Subgraph Embedding:
                 row = torch.arange(data.batch.size(0))
                 edge_index = torch.stack([row, data.batch], dim=0)
-                out = self.pooling(x, data.batch).relu_()
-                graph_reps = self.subgraph_conv((x, out), edge_index)
+                out = self.pooling(node_reps, data.batch).relu_()
+                graph_reps = self.subgraph_conv((node_reps, out), edge_index)
             else:
                 graph_reps = self.pooling(node_reps, data.batch)
 
@@ -227,7 +204,12 @@ class GraphTransformer(nn.Module):
         sim_matrix = torch.einsum('ik,jk->ij', x, x_aug) / torch.einsum('i,j->ij', x_abs, x_aug_abs)
         sim_matrix = torch.exp(sim_matrix / 0.2)
         pos_sim = sim_matrix[range(batch_size), range(batch_size)]
-        loss = pos_sim / (sim_matrix.sum(dim=1) - pos_sim)
+        # 判断分母是否为0
+        minnum = 0
+        if ((sim_matrix.sum(dim=1) - pos_sim) == 0).any():
+            minnum = torch.tensor(1e-6)
+        loss = pos_sim / (sim_matrix.sum(dim=1) - pos_sim + minnum)
+        # loss = pos_sim / (sim_matrix.sum(dim=1) - pos_sim)
         loss = - torch.log(loss).mean()
         return loss
 

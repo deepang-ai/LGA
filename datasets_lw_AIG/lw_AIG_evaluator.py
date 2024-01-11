@@ -15,7 +15,7 @@ class Evaluator:
         self.name = name
 
         self.num_tasks = 1
-        self.eval_metric = 'acc'
+        self.eval_metric = 'F1'
 
 
     def _parse_and_check_input(self, input_dict):

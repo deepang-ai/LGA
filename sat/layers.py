@@ -28,7 +28,7 @@ class Attention(gnn.MessagePassing):
     """
 
     def __init__(self, embed_dim, num_heads=8, dropout=0., bias=False,
-        symmetric=False, gnn_type="gcn", se="gnn", k_hop=2, act_func=nn.ReLU, **kwargs):
+        symmetric=False, gnn_type="gcn", se="gnn", k_hop=2, **kwargs):
 
         super().__init__(node_dim=0, aggr='add')
         self.embed_dim = embed_dim
@@ -44,7 +44,7 @@ class Attention(gnn.MessagePassing):
         self.gnn_type = gnn_type
         if self.se == "khopgnn":
             self.khop_structure_extractor = KHopStructureExtractor(embed_dim, gnn_type=gnn_type,
-                                                          num_layers=k_hop, act_func=act_func, **kwargs)
+                                                          num_layers=k_hop,  **kwargs)
         else:
             self.structure_extractor = StructureExtractor(embed_dim, gnn_type=gnn_type,
                                                           num_layers=k_hop, **kwargs)
@@ -201,7 +201,7 @@ class StructureExtractor(nn.Module):
     """
 
     def __init__(self, embed_dim, gnn_type="gcn", num_layers=3,
-                 batch_norm=True, concat=True, khopgnn=False, act_func=nn.ReLU, **kwargs):
+                 batch_norm=True, concat=True, khopgnn=False, **kwargs):
         super().__init__()
         self.num_layers = num_layers
         self.khopgnn = khopgnn
@@ -212,7 +212,7 @@ class StructureExtractor(nn.Module):
             layers.append(get_simple_gnn_layer(gnn_type, embed_dim, **kwargs))
         self.gcn = nn.ModuleList(layers)
 
-        # self.act_func = act_func
+
         self.relu = nn.ReLU()
 
         self.batch_norm = batch_norm
@@ -231,15 +231,11 @@ class StructureExtractor(nn.Module):
             #     x = gcn_layer(x, edge_index, None, edge_attr=edge_attr)
             if self.gnn_type in EDGE_GNN_TYPES:
                 if edge_attr is None:
-                    # x = self.act_func(gcn_layer(x, edge_index))
                     x = self.relu(gcn_layer(x, edge_index))
                 else:
-                    # x = self.act_func(gcn_layer(x, edge_index, edge_attr=edge_attr))
                     x = self.relu(gcn_layer(x, edge_index, edge_attr=edge_attr))
             else:
-                # x = self.act_func(gcn_layer(x, edge_index))
                 x = self.relu(gcn_layer(x, edge_index))
-
 
             if self.concat:
                 x_cat.append(x)
@@ -275,7 +271,7 @@ class KHopStructureExtractor(nn.Module):
     khopgnn (bool):         whether to use the subgraph instead of subtree (True)
     """
     def __init__(self, embed_dim, gnn_type="gcn", num_layers=3, batch_norm=True,
-            concat=True, khopgnn=True, act_func=nn.ReLU, **kwargs):
+            concat=True, khopgnn=True, **kwargs):
         super().__init__()
         self.num_layers = num_layers
         self.khopgnn = khopgnn
@@ -288,7 +284,6 @@ class KHopStructureExtractor(nn.Module):
             num_layers=num_layers,
             concat=False,
             khopgnn=True,
-            act_func=act_func,
             **kwargs
         )
 
@@ -308,7 +303,9 @@ class KHopStructureExtractor(nn.Module):
             subgraph_indicator_index=subgraph_indicator_index,
             agg="sum",
         )
+
         x_struct = torch.cat([x, x_struct], dim=-1)
+
         if self.batch_norm:
             x_struct = self.bn(x_struct)
         x_struct = self.out_proj(x_struct)
@@ -334,13 +331,13 @@ class TransformerEncoderLayer(nn.TransformerEncoderLayer):
         se:                 structure extractor to use, either gnn or khopgnn (default: gnn).
         k_hop:              the number of base GNN layers or the K hop size for khopgnn structure extractor (default=2).
     """
-    def __init__(self, d_model, nhead=8, dim_feedforward=512, dropout=0.1, act_func=nn.ReLU,
-                trans_act_func="relu", batch_norm=True, pre_norm=False,
+    def __init__(self, d_model, nhead=8, dim_feedforward=512, dropout=0.1
+                 , batch_norm=True, pre_norm=False,
                 gnn_type="gcn", se="gnn", k_hop=2, **kwargs):
-        super().__init__(d_model, nhead, dim_feedforward, dropout, trans_act_func)
+        super().__init__(d_model, nhead, dim_feedforward, dropout)
 
         self.self_attn = Attention(d_model, nhead, dropout=dropout,
-            bias=False, gnn_type=gnn_type, se=se, k_hop=k_hop, act_func=act_func, **kwargs)
+            bias=False, gnn_type=gnn_type, se=se, k_hop=k_hop, **kwargs)
         self.batch_norm = batch_norm
         self.pre_norm = pre_norm
         if batch_norm:
@@ -380,7 +377,6 @@ class TransformerEncoderLayer(nn.TransformerEncoderLayer):
         else:
             x = self.norm1(x)
         x2 = self.linear2(self.dropout(self.activation(self.linear1(x))))
-        # x2 = self.linear2(self.activation(self.linear1(x)))
         x = x + self.dropout2(x2)
 
         if not self.pre_norm:

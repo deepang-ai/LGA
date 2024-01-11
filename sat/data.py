@@ -136,9 +136,12 @@ class GraphDataset(object):
         data.degree = None
         if self.degree:
             data.degree = self.degree_list[index]
+        # data.abs_pe = None
         data.abs_pe = None
         if self.abs_pe_list is not None and len(self.abs_pe_list) == len(self.dataset):
             data.abs_pe = self.abs_pe_list[index]
+
+
          
         # add subgraphs and relevant meta data
         if self.se == "khopgnn":
