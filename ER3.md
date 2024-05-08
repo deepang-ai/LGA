@@ -21,6 +21,6 @@ python train_lw_AIG.py --gnn-type gat --se khopgnn --dataset ico_wallets/Volume 
 
 
 |          | Eth-Phish&Hack (Amount) | Eth-Phish&Hack (Times) | Eth-Phish&Hack (avgAmount) | 
-|----------|-------------------------|-------------------|----------------------|
-| Ethident | 97.93±0.002             | 97.58±0.004       | 97.98±0.003          |
-| SAT      | 94.99±1.890             |                   |                      |
+|----------|-----------|------------------|---------------------|
+| Ethident | 97.93     | 97.58            | 97.98               |
+| Ours     | 97.95     | 97.73            | 98.00               |

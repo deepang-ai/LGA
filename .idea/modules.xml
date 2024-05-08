@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/SAT.iml" filepath="$PROJECT_DIR$/.idea/SAT.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/LGA.iml" filepath="$PROJECT_DIR$/.idea/LGA.iml" />
     </modules>
   </component>
 </project>

@@ -18,12 +18,12 @@ import torch.nn.functional as F
 from torch_geometric.data import DataLoader
 from torch_geometric import datasets
 import torch_geometric.utils as utils
-from sat.models import GraphTransformer, ACT_FUNC
-from sat.data import GraphDataset
-from sat.utils import count_parameters
-from sat.position_encoding import POSENCODINGS
-from sat.gnn_layers import GNN_TYPES
-from sat.utils import add_zeros, extract_node_feature, extract_edge_feature
+from lga.models import GraphTransformer, ACT_FUNC
+from lga.data import GraphDataset
+from lga.utils import count_parameters
+from lga.position_encoding import POSENCODINGS
+from lga.gnn_layers import GNN_TYPES
+from lga.utils import add_zeros, extract_node_feature, extract_edge_feature
 from timeit import default_timer as timer
 
 from datasets_lw_AIG.lw_AIG_dataset_pyg import PygGraphPropPredDataset
@@ -309,7 +309,7 @@ def main():
 
     transform_aug2 = T.Compose([
         partial(extract_node_feature, reduce=args.aggr),
-        Augmentor_Transform['edgeRemove'](prob=0.1),
+        Augmentor_Transform['nodeDrop'](prob=0.1),
         ColumnNormalizeFeatures(['edge_attr']),
         T.NormalizeFeatures()
     ])
