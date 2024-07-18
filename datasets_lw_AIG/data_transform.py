@@ -353,22 +353,22 @@ if __name__ == '__main__':
 
     ########################################
     #
-    # load_datasets = ['./data/eth/ico_wallets/2hop-20/averVolume/', './data/eth/ico_wallets/2hop-20/Times/',
-    #                  './data/eth/ico_wallets/2hop-20/Volume/',
-    #                  './data/eth/mining/2hop-20/averVolume/', './data/eth/mining/2hop-20/Times/',
-    #                  './data/eth/mining/2hop-20/Volume/',
-    #                  './data/eth/exchange/2hop-20/averVolume/', './data/eth/exchange/2hop-20/Times/',
-    #                  './data/eth/exchange/2hop-20/Volume/',
-    #                  './data/eth/phish_hack/2hop-20/averVolume/', './data/eth/phish_hack/2hop-20/Times/',
-    #                  './data/eth/phish_hack/2hop-20/Volume/',]
-    # save_datasets = ['./ico_wallets/averVolume/', './ico_wallets/Times/', './ico_wallets/Volume/',
-    #                  './mining/averVolume/', './mining/Times/', './mining/Volume/',
-    #                  './exchange/averVolume/', './exchange/Times/', './exchange/Volume/',
-    #                  # './phish_hack/averVolume/', './phish_hack/Times/', './phish_hack/Volume/'
-    #                  ]
+    load_datasets = ['./data/eth/ico_wallets/2hop-20/averVolume/', './data/eth/ico_wallets/2hop-20/Times/',
+                     './data/eth/ico_wallets/2hop-20/Volume/',
+                     './data/eth/mining/2hop-20/averVolume/', './data/eth/mining/2hop-20/Times/',
+                     './data/eth/mining/2hop-20/Volume/',
+                     './data/eth/exchange/2hop-20/averVolume/', './data/eth/exchange/2hop-20/Times/',
+                     './data/eth/exchange/2hop-20/Volume/',
+                     './data/eth/phish_hack/2hop-20/averVolume/', './data/eth/phish_hack/2hop-20/Times/',
+                     './data/eth/phish_hack/2hop-20/Volume/',]
+    save_datasets = ['./ico_wallets/averVolume/', './ico_wallets/Times/', './ico_wallets/Volume/',
+                     './mining/averVolume/', './mining/Times/', './mining/Volume/',
+                     './exchange/averVolume/', './exchange/Times/', './exchange/Volume/',
+                     # './phish_hack/averVolume/', './phish_hack/Times/', './phish_hack/Volume/'
+                     ]
 
-    load_datasets = ['./data/eth/phish_hack/2hop-20/Volume/']
-    save_datasets = ['./phish_hack/Volume/']
+    # load_datasets = ['./data/eth/phish_hack/2hop-20/Volume/']
+    # save_datasets = ['./phish_hack/Volume/']
     for load_dir, save_dir in zip(load_datasets, save_datasets):
         dataset = MyBlockChain_TUDataset(root=load_dir, name='ETHG',
                                          use_node_attr=True,
