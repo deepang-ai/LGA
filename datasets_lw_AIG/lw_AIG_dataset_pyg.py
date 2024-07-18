@@ -233,9 +233,9 @@ class PygGraphPropPredDataset(InMemoryDataset):
 
     def get_idx_split(self, X, Y, seed,  K, k_idx, dataset):
         train_splits, val_splits, test_splits = data_split(X=X,Y=Y,  seed=seed, K=K)
-        np.savetxt('../datasets_lw_AIG/'+dataset+'/split/train_splits.csv', train_splits[0], fmt='%d', delimiter=',')
-        np.savetxt('../datasets_lw_AIG/' + dataset + '/split/val_splits.csv', val_splits[0], fmt='%d', delimiter=',')
-        np.savetxt('../datasets_lw_AIG/' + dataset + '/split/test_splits.csv', test_splits[0], fmt='%d', delimiter=',')
+        np.savetxt('./datasets_lw_AIG/' + dataset + '/split/train_splits.csv', train_splits[0], fmt='%d', delimiter=',')
+        np.savetxt('./datasets_lw_AIG/' + dataset + '/split/val_splits.csv', val_splits[0], fmt='%d', delimiter=',')
+        np.savetxt('./datasets_lw_AIG/' + dataset + '/split/test_splits.csv', test_splits[0], fmt='%d', delimiter=',')
 
         return {'train': torch.tensor(train_splits[k_idx], dtype=torch.long), 'valid': torch.tensor(val_splits[k_idx], dtype=torch.long),
                 'test': torch.tensor(test_splits[k_idx], dtype=torch.long)}

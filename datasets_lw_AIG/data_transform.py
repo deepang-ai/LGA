@@ -54,7 +54,7 @@ def my_read_tu_data(folder, prefix):
 
     x = cat([node_attributes, important_labels])
 
-    # np.savetxt('./test/x.csv', x.detach().numpy(), fmt='%d', delimiter=',')
+
 
     edge_attributes, edge_labels = None, None
     if 'edge_attributes' in names:

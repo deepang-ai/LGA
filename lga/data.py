@@ -123,6 +123,7 @@ class GraphDataset(object):
         return len(self.dataset)
 
     def __getitem__(self, index):
+
         data = self.dataset[index]
 
         if self.n_features == 1:

@@ -33,7 +33,7 @@ class GraphTransformerEncoder(nn.TransformerEncoder):
 class GraphTransformer(nn.Module):
     def __init__(self, in_size, num_class, d_model, num_heads=8,
                  dim_feedforward=512, dropout=0.0, num_layers=4,
-                 batch_norm=False, abs_pe=False, abs_pe_dim=0,
+                 batch_norm=False,
                  gnn_type="graph", se="gnn", use_edge_attr=False, num_edge_features=4,
                  in_embed=True, edge_embed=True, use_global_pool=True, max_seq_len=None,
                  global_pool='mean', **kwargs):
@@ -50,10 +50,7 @@ class GraphTransformer(nn.Module):
         self.subgraph_conv = GATConv(d_model, d_model, dropout=dropout,
                                      add_self_loops=True, negative_slope=0.01)
 
-        self.abs_pe = abs_pe
-        self.abs_pe_dim = abs_pe_dim
-        if abs_pe and abs_pe_dim > 0:
-            self.embedding_abs_pe = nn.Linear(abs_pe_dim, d_model)
+
         if in_embed:
             if isinstance(in_size, int):
                 self.embedding = nn.Embedding(in_size, d_model) 
@@ -128,14 +125,12 @@ class GraphTransformer(nn.Module):
             subgraph_edge_attr = None
 
         complete_edge_index = data.complete_edge_index if hasattr(data, 'complete_edge_index') else None
-        abs_pe = data.abs_pe if hasattr(data, 'abs_pe') else None
+
         degree = data.degree if hasattr(data, 'degree') else None
 
         output = self.embedding(x.float()) if node_depth is None else self.embedding(x, node_depth.view(-1,))
             
-        if self.abs_pe and abs_pe is not None:
-            abs_pe = self.embedding_abs_pe(abs_pe)
-            output = output + abs_pe
+
         if self.use_edge_attr and edge_attr is not None:
             edge_attr = self.embedding_edge(edge_attr)
             if subgraph_edge_attr is not None:
@@ -216,6 +211,8 @@ class GraphTransformer(nn.Module):
     def loss_su(self, pred_out, target):          #loss_{pred}
 
         loss = torch.nn.CrossEntropyLoss()
+
+
         try:
             loss = loss(pred_out, target)
         except:
@@ -229,10 +226,3 @@ class GraphTransformer(nn.Module):
 
 
 
-ACT_FUNC = {
-    'relu': nn.ReLU(),
-    'leaky_relu': nn.LeakyReLU(),
-    'mish': nn.Mish(),
-    'gelu': nn.GELU(),
-    'elu': nn.ELU()
-}
