@@ -85,6 +85,7 @@ def load_args():
     parser.add_argument('--early_stop', type=int, help='', default=1)
     parser.add_argument('--early_stop_mindelta', '-min_delta', type=float, help='gpu id', default=-0.)
     parser.add_argument('--patience', type=int, help='patience', default=20)
+
     parser.add_argument('--training_times', '-t_times', type=int, help='training times', default=10)
 
     parser.add_argument('--Lambda', type=float, help='loss trade-off', default=0.01)
@@ -281,6 +282,7 @@ def main():
 
     transform_aug1 = T.Compose([
         partial(extract_node_feature, reduce=args.aggr),
+        Augmentor_Transform['identity'](prob=None),
         ColumnNormalizeFeatures(['edge_attr']),
         T.NormalizeFeatures()
     ])

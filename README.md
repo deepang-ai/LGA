@@ -16,17 +16,18 @@ torch==1.9.1
 ```
 
 ## Data
-Download data in PYG format from this [page](https://jjzhou.notion.site/Ethident-Data-861199675dc7454eb36157eeee09cf5b) and place it under the 'datasets_lw_AIG/data/' path.
+Download data in PYG format from this [page](https://jjzhou.notion.site/Ethident-Data-861199675dc7454eb36157eeee09cf5b) and place it under the path 'datasets_lw_AIG/data/'.
+
 
 Transform the datasets:
 ```
-data_transform.py
+python data_transform.py
 ```
 
 ## Usage
 
 ```
-train.py
+python train.py
 ```
 
 
