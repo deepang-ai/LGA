@@ -34,16 +34,20 @@ from utils import ColumnNormalizeFeatures
 from utils import EarlyStopping
 import torch_geometric.transforms as T
 
+from models import GCN, I2BGNN, GAT, GIN
 
-from sklearn.metrics import  f1_score
+
+from sklearn.metrics import  f1_score, precision_score, recall_score
 from transform import Augmentor_Transform
 def load_args():
     parser = argparse.ArgumentParser(
-        description='Structure-Aware Transformer on OGBG-PPA',
+        description='LGA',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     # parser.add_argument('--seed', type=int, default=0,
     #                     help='random seed')
-    parser.add_argument('--dataset', type=str, default="ico_wallets/Volume",
+    parser.add_argument('--model', type=str, default='LGA', choices=['LGA', 'GCN', 'GAT', 'GIN', 'I2BGNNA', 'I2BGNNT'],
+                        help='model choices')
+    parser.add_argument('--dataset', type=str, default="phish_hack/TImes",
                         help='name of dataset')
     parser.add_argument('--num-heads', type=int, default=8, help="number of heads")
     parser.add_argument('--num-layers', type=int, default=2, help="number of layers")
@@ -66,7 +70,7 @@ def load_args():
     parser.add_argument('--gnn-type', type=str, default='gat',  # Base GNN model
                         choices=GNN_TYPES,
                         help="GNN structure extractor type")
-    parser.add_argument('--k-hop', type=int, default=1, help="number of layers for GNNs")
+    parser.add_argument('--k-hop', type=int, default=20, help="number of layers for GNNs")
     parser.add_argument('--global-pool', type=str, default='mean', choices=['mean', 'cls', 'add', 'gat'],
                         # Aggregate node-level representations into a graph representation.
                         help='global pooling method')
@@ -77,7 +81,7 @@ def load_args():
                         help='the aggregation operator to obtain nodes\' initial features [mean, max, add]')
     parser.add_argument('--not_extract_node_feature', action='store_true')
 
-    parser.add_argument('--seed', type=int, help='random seed', default=12)
+    parser.add_argument('--seed', type=int, help='random seed', default=75)
 
 
     parser.add_argument('--k_ford', '-KF', type=int, help='', default=3)
@@ -86,7 +90,7 @@ def load_args():
     parser.add_argument('--early_stop_mindelta', '-min_delta', type=float, help='gpu id', default=-0.)
     parser.add_argument('--patience', type=int, help='patience', default=20)
 
-    parser.add_argument('--training_times', '-t_times', type=int, help='training times', default=10)
+    parser.add_argument('--training_times', '-t_times', type=int, help='training times', default=1)
 
     parser.add_argument('--Lambda', type=float, help='loss trade-off', default=0.01)
 
@@ -172,20 +176,34 @@ def train_epoch(model, loader, criterion, optimizer, lr_scheduler, epoch, use_cu
 
 
         optimizer.zero_grad()
-        node_reps_v1, graph_reps_v1, pred_out_v1 = model(data_v1)
-        node_reps_v2, graph_reps_v2, pred_out_v2 = model(data_v2)
-        node_reps, graph_reps, pred_out = model(data_raw)
+
+        if args.model == "LGA:":
+            node_reps_v1, graph_reps_v1, pred_out_v1 = model(data_v1)
+            node_reps_v2, graph_reps_v2, pred_out_v2 = model(data_v2)
+            node_reps, graph_reps, pred_out = model(data_raw)
 
 
-        loss, loss_self, loss_pred = model.loss_cal(x=graph_reps_v1, x_aug=graph_reps_v2, pred_out=pred_out,
-                                                        target=data_raw.y.squeeze(), Lambda=args.Lambda)
+            loss, loss_self, loss_pred = model.loss_cal(x=graph_reps_v1, x_aug=graph_reps_v2, pred_out=pred_out,
+                                                            target=data_raw.y.squeeze(), Lambda=args.Lambda)
+        else:
+            node_reps, graph_reps, pred_out = model(data_raw)
+            loss = torch.nn.CrossEntropyLoss()
 
+            try:
+                loss = loss(pred_out, data_raw.y.squeeze())
+            except:
+                loss = loss(pred_out, torch.tensor([data_raw.y.squeeze()]))
 
         loss.backward()
         optimizer.step()
-        total_loss += float(loss) * data_raw.num_graphs
-        total_loss_pred += float(loss_pred) * data_raw.num_graphs
-        total_loss_self += float(loss_self) * data_raw.num_graphs
+        if args.model == "LGA:":
+            total_loss += float(loss) * data_raw.num_graphs
+            total_loss_pred += float(loss_pred) * data_raw.num_graphs
+            total_loss_self += float(loss_self) * data_raw.num_graphs
+        else:
+            total_loss += float(loss) * data_raw.num_graphs
+            total_loss_pred += float(loss) * data_raw.num_graphs
+            total_loss_self += 0
 
             # running_loss += loss.item() * size
 
@@ -237,12 +255,14 @@ def eval_epoch(model, loader, criterion, use_cuda=False, split='Val'):
     evaluator = Evaluator(name=args.dataset)
 
     score = f1_score(y_true=y_true, y_pred=y_pred, average='micro')
+    precision = precision_score(y_true, y_pred, average=None)[1]
+    recall = recall_score(y_true, y_pred, average=None)[1]
 
     # score = evaluator.eval({'y_true': [y_true],
     #                         'y_pred': [y_pred]})['acc']
     print('{} loss: {:.4f} score: {:.4f} time: {:.2f}s'.format(
         split, epoch_loss, score, toc - tic))
-    return score, epoch_loss
+    return precision, recall, score, epoch_loss
 
 
 def main():
@@ -301,10 +321,15 @@ def main():
     seeds = [i for i in range(args.training_times)]
 
     all_score_list = []
+    all_precision_list = []
+    all_recall_list = []
     final_score_list = []
     for t in range(args.training_times):
         print("========================training times:{}========================".format(t))
+        k_fold_test_precision_list = []
+        k_fold_test_recall_list = []
         k_fold_test_score_list = []
+
         for k in range(args.k_ford):
             print("========================k_idx:{}========================".format(k))
             split_idx = dataset.get_idx_split(X=np.arange(len(dataset)),
@@ -347,28 +372,41 @@ def main():
             else:
                 deg = None
 
-            model = GraphTransformer(in_size=input_size,
-                                     num_class=dataset.num_classes,
-                                     d_model=args.dim_hidden,
-                                     dim_feedforward=int(2 * args.dim_hidden),
-                                     dropout=args.dropout,
-                                     num_heads=args.num_heads,
-                                     num_layers=args.num_layers,
-                                     batch_norm=args.batch_norm,
-                                     gnn_type=args.gnn_type,
-                                     k_hop=args.k_hop,
-                                     use_edge_attr=args.use_edge_attr,
-                                     num_edge_features=num_edge_features,
-                                     edge_dim=args.edge_dim,
-                                     se=args.se,
-                                     deg=deg,
-                                     in_embed=False,
-                                     edge_embed=False,
-                                     global_pool=args.global_pool,
-                                     )
+            model=None
+            if args.model == "LGA":
+                model = GraphTransformer(in_size=input_size,
+                                         num_class=dataset.num_classes,
+                                         d_model=args.dim_hidden,
+                                         dim_feedforward=int(2 * args.dim_hidden),
+                                         dropout=args.dropout,
+                                         num_heads=args.num_heads,
+                                         num_layers=args.num_layers,
+                                         batch_norm=args.batch_norm,
+                                         gnn_type=args.gnn_type,
+                                         k_hop=args.k_hop,
+                                         use_edge_attr=args.use_edge_attr,
+                                         num_edge_features=num_edge_features,
+                                         edge_dim=args.edge_dim,
+                                         se=args.se,
+                                         deg=deg,
+                                         in_embed=False,
+                                         edge_embed=False,
+                                         global_pool=args.global_pool,
+                                         )
+            elif args.model == "GAT":
+                model = GAT(num_node_features=input_size, hidden_channels=args.dim_hidden, out_channels=dataset.num_classes)
+            elif args.model == "GCN":
+                model = GCN(num_node_features=input_size, hidden_channels=args.dim_hidden, out_channels=dataset.num_classes)
+            elif args.model == "GIN":
+                model = GIN(num_features=input_size, hidden_dim=args.dim_hidden, embedding_dim=args.dim_hidden,
+                            output_dim=dataset.num_classes, n_layers=2)
+            elif args.model == "I2BGNNA":
+                model = I2BGNN(in_channels=input_size, dim=args.dim_hidden, out_channels=dataset.num_classes, which_edge_weight='A')
+            elif args.model == "I2BGNNT":
+                model = I2BGNN(in_channels=input_size, dim=args.dim_hidden, out_channels=dataset.num_classes, which_edge_weight='T')
+
             print(model)
             if args.use_cuda:
-
                 model.cuda()
             print("Total number of parameters: {}".format(count_parameters(model)))
 
@@ -407,47 +445,62 @@ def main():
             for epoch in range(args.epochs):
                 print("Epoch {}/{}, LR {:.6f}".format(epoch + 1, args.epochs, optimizer.param_groups[0]['lr']))
                 train_loss = train_epoch(model, train_loader, criterion, optimizer, warmup_lr_scheduler, epoch, args.use_cuda)
-                val_score, val_loss = eval_epoch(model, val_loader, criterion, args.use_cuda, split='Val')
-                test_score, test_loss = eval_epoch(model, test_loader, criterion, args.use_cuda, split='Test')
+                val_precision, val_recall, val_score, val_loss = eval_epoch(model, val_loader, criterion, args.use_cuda, split='Val')
+                test_precision, test_recall, test_score, test_loss = eval_epoch(model, test_loader, criterion, args.use_cuda, split='Test')
 
 
                 if epoch >= args.warmup:
                     lr_scheduler.step()
 
                 logs['train_loss'].append(train_loss)
+                logs['val_precision'].append(val_precision)
+                logs['val_recall'].append(val_recall)
                 logs['val_score'].append(val_score)
+                logs['test_precision'].append(test_precision)
+                logs['test_recall'].append(test_recall)
                 logs['test_score'].append(test_score)
                 if val_score > best_val_score:
+                    best_val_precision = val_precision
+                    best_val_recall = val_recall
                     best_val_score = val_score
                     best_val_loss = val_loss
                     best_epoch = epoch
                     best_weights = copy.deepcopy(model.state_dict())
 
                 if args.early_stop:
-                    early_stopping(val_loss, results=[epoch, train_loss,  val_score, val_loss, test_score, test_loss])
+                    early_stopping(val_loss, results=[epoch, train_loss, val_precision, val_recall,  val_score, val_loss, test_precision, test_recall, test_score, test_loss])
                     if early_stopping.early_stop:
                         print('\n=====final results=====')
-                        _epoch, _train_loss, _val_score, _val_loss, _test_score, _test_loss = early_stopping.best_results
+                        _epoch, _train_loss, _val_precision, _val_recall, _val_score, _val_loss, _test_precision, _test_recall, _test_score, _test_loss = early_stopping.best_results
                         all_score_list.append(_test_score)
+                        k_fold_test_precision_list.append(_test_precision)
+                        k_fold_test_recall_list.append(_test_recall)
                         k_fold_test_score_list.append(_test_score)
                         print(f'Exp: {1},  Epoch: {_epoch:03d},   '
                               f'Train_Loss: {_train_loss:.4f},   '
                               f'Val_Loss: {_val_loss:.4f},   '
-                              f'Val_Acc: {_val_score:.4f},   '
-                              f'Test_loss: {_test_loss:.4f},   '
-                              f'Test_Acc: { _test_score:.4f}\n\n')
+                              f'Val_Precision: {_val_precision:.4f},   '
+                              f'Val_Recall: {_val_recall:.4f},   '
+                              f'Val_Score: {_val_score:.4f},   '
+                              f'Val_Loss: {_val_loss:.4f},   '
+                              f'Test_Precision: {_val_precision:.4f},   '
+                              f'Test_Recall: {_val_recall:.4f},   '
+                              f'Test_Score: { _test_score:.4f},   '
+                              f'Test_loss: {_test_loss:.4f}\n\n'
+                              )
                         break
                 else:
                     all_score_list.append(test_score)
+
             total_time = timer() - start_time
             print("best val loss: {} test_score: {:.4f}".format(_val_loss , _test_score))
             model.load_state_dict(best_weights)
 
             print()
             print("Testing...")
-            test_score, test_loss = eval_epoch(model, test_loader, criterion, args.use_cuda, split='Test')
+            test_precision, test_recall, test_score, test_loss = eval_epoch(model, test_loader, criterion, args.use_cuda, split='Test')
 
-            print("test ACC {:.4f}".format(test_score))
+            print("test Score {:.4f}".format(test_score))
 
             if args.save_logs:
                 logs = pd.DataFrame.from_dict(logs)
@@ -470,6 +523,10 @@ def main():
 
         print('k-fold cross validation test score:{} ~ {}'.format(np.mean(k_fold_test_score_list),
                                                                   np.std(k_fold_test_score_list)))
+        print('k-fold cross validation test precision:{} ~ {}'.format(np.mean(k_fold_test_precision_list),
+                                                                  np.std(k_fold_test_precision_list)))
+        print('k-fold cross validation test recall:{} ~ {}'.format(np.mean(k_fold_test_recall_list),
+                                                                  np.std(k_fold_test_recall_list)))
         final_score_list.append(np.mean(k_fold_test_score_list))
 
     print('final test score:{} ~ {}'.format(np.mean(final_score_list),np.std(final_score_list)))

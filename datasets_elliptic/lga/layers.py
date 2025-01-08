@@ -6,8 +6,8 @@ from torch_scatter import scatter_add, scatter_mean, scatter_max
 import torch_geometric.nn as gnn
 import torch_geometric.utils as utils
 from einops import rearrange
-from .utils import pad_batch, unpad_batch
-from .gnn_layers import get_simple_gnn_layer, EDGE_GNN_TYPES
+from datasets_elliptic.lga.utils import pad_batch, unpad_batch
+from datasets_elliptic.lga.gnn_layers import get_simple_gnn_layer, EDGE_GNN_TYPES
 import torch.nn.functional as F
 
 
@@ -38,6 +38,7 @@ class Attention(gnn.MessagePassing):
 
         self.num_heads = num_heads
         self.scale = head_dim ** -0.5
+
         self.batch_first = False
 
         self.se = se
@@ -344,7 +345,6 @@ class TransformerEncoderLayer(nn.TransformerEncoderLayer):
         if batch_norm:
             self.norm1 = nn.BatchNorm1d(d_model)
             self.norm2 = nn.BatchNorm1d(d_model)
-
 
 
     def forward(self, x, edge_index, complete_edge_index,

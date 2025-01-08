@@ -1,0 +1,9 @@
+data_path: ./datasets_elliptic
+use_cuda: True
+
+hidden_units: 100
+hidden_units_noAgg: 100
+epochs: 1000
+num_classes: 2
+lr: 0.001
+weight_decay: 5e-4
