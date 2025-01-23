@@ -39,7 +39,7 @@ from sklearn.metrics import  f1_score
 from transform import Augmentor_Transform
 def load_args():
     parser = argparse.ArgumentParser(
-        description='Structure-Aware Transformer on OGBG-PPA',
+        description='LGA',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     # parser.add_argument('--seed', type=int, default=0,
     #                     help='random seed')

@@ -6,8 +6,8 @@ from torch_scatter import scatter_add, scatter_mean, scatter_max
 import torch_geometric.nn as gnn
 import torch_geometric.utils as utils
 from einops import rearrange
-from .utils import pad_batch, unpad_batch
-from .gnn_layers import get_simple_gnn_layer, EDGE_GNN_TYPES
+from datasets_elliptic.lga.utils import pad_batch, unpad_batch
+from datasets_elliptic.lga.gnn_layers import get_simple_gnn_layer, EDGE_GNN_TYPES
 import torch.nn.functional as F
 
 
@@ -322,13 +322,13 @@ class TransformerEncoderLayer(nn.TransformerEncoderLayer):
     ----------
         d_model (int):      the number of expected features in the input (required).
         nhead (int):        the number of heads in the multiheadattention models (default=8).
-        dim_feedforward (int): the dimension of the feedforward network model (default=512).
+        dim_feedforward (int): the dimension of the feedforward network ethident (default=512).
         dropout:            the dropout value (default=0.1).
         activation:         the activation function of the intermediate layer, can be a string
             ("relu" or "gelu") or a unary callable (default: relu).
         batch_norm:         use batch normalization instead of layer normalization (default: True).
         pre_norm:           pre-normalization or post-normalization (default=False).
-        gnn_type:           base GNN model to extract subgraph representations.
+        gnn_type:           base GNN ethident to extract subgraph representations.
                             One can implememnt customized GNN in gnn_layers.py (default: gcn).
         se:                 structure extractor to use, either gnn or khopgnn (default: gnn).
         k_hop:              the number of base GNN layers or the K hop size for khopgnn structure extractor (default=2).
