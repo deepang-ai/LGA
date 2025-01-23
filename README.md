@@ -50,7 +50,7 @@ Size: 203,769 nodes and 234,355 edges
 
 Challenge: The challenge on the Elliptic dataset is to classify the illicit and licit nodes in the graph.
 
-Preparation: Download Elliptic dataset in PYG format from this [page](https://www.kaggle.com/datasets/ellipticco/elliptic-data-set) and place it under the path 'datasets_elliptic/'.
+Preparation: Download Elliptic dataset from this [page](https://www.kaggle.com/datasets/ellipticco/elliptic-data-set) and place it under the path 'datasets_elliptic/'.
 
 ## Benchmark
 ### lw_AIG dataset
