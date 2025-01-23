@@ -38,6 +38,7 @@ class Attention(gnn.MessagePassing):
 
         self.num_heads = num_heads
         self.scale = head_dim ** -0.5
+        self.batch_first = False
 
         self.batch_first = False
 
@@ -322,13 +323,13 @@ class TransformerEncoderLayer(nn.TransformerEncoderLayer):
     ----------
         d_model (int):      the number of expected features in the input (required).
         nhead (int):        the number of heads in the multiheadattention models (default=8).
-        dim_feedforward (int): the dimension of the feedforward network model (default=512).
+        dim_feedforward (int): the dimension of the feedforward network ethident (default=512).
         dropout:            the dropout value (default=0.1).
         activation:         the activation function of the intermediate layer, can be a string
             ("relu" or "gelu") or a unary callable (default: relu).
         batch_norm:         use batch normalization instead of layer normalization (default: True).
         pre_norm:           pre-normalization or post-normalization (default=False).
-        gnn_type:           base GNN model to extract subgraph representations.
+        gnn_type:           base GNN ethident to extract subgraph representations.
                             One can implememnt customized GNN in gnn_layers.py (default: gcn).
         se:                 structure extractor to use, either gnn or khopgnn (default: gnn).
         k_hop:              the number of base GNN layers or the K hop size for khopgnn structure extractor (default=2).
@@ -345,6 +346,7 @@ class TransformerEncoderLayer(nn.TransformerEncoderLayer):
         if batch_norm:
             self.norm1 = nn.BatchNorm1d(d_model)
             self.norm2 = nn.BatchNorm1d(d_model)
+
 
 
     def forward(self, x, edge_index, complete_edge_index,
