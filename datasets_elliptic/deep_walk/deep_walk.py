@@ -69,6 +69,9 @@ if __name__ == '__main__':
         embeddings = deepwalk.learn_embeddings(walks)
         all_embeddings = embeddings.vectors
 
+        c = all_embeddings[train_data.train_mask]
+        t= train_data.y[train_data.train_mask].numpy().tolist()
+
         model.fit(all_embeddings[train_data.train_mask], train_data.y[train_data.train_mask].numpy().tolist())
 
 

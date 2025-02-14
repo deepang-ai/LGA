@@ -70,11 +70,11 @@ def load_args():
     parser.add_argument('--gnn-type', type=str, default='gat',  # Base GNN model
                         choices=GNN_TYPES,
                         help="GNN structure extractor type")
-    parser.add_argument('--k-hop', type=int, default=20, help="number of layers for GNNs")
+    parser.add_argument('--k-hop', type=int, default=1, help="number of layers for GNNs")
     parser.add_argument('--global-pool', type=str, default='mean', choices=['mean', 'cls', 'add', 'gat'],
                         # Aggregate node-level representations into a graph representation.
                         help='global pooling method')
-    parser.add_argument('--se', type=str, default="gnn",  # k-subtree or k-subgraph GNN extractor
+    parser.add_argument('--se', type=str, default="khopgnn",  # k-subtree or k-subgraph GNN extractor
                         help='Extractor type: khopgnn, or gnn')
 
     parser.add_argument('--aggr', type=str, default='add',  # Aggregation edge features to obtain nodes initial features
