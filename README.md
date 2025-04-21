@@ -1,7 +1,7 @@
 # Hierarchical Network with Local-Global Awareness for Ethereum Account De-anonymization
 
 
-Official implementation of Hierarchical Network with Local-Global Awareness for Ethereum Account De-anonymization. zzz
+Official implementation of Hierarchical Network with Local-Global Awareness for Ethereum Account De-anonymization. 
 
 ## Network Architecture
 
