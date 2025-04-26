@@ -34,7 +34,7 @@ from utils import ColumnNormalizeFeatures
 from utils import EarlyStopping
 import torch_geometric.transforms as T
 
-from models import GCN, I2BGNN, GAT, GIN, GAT2, AEtransGAT
+from models import GCN, I2BGNN, GAT, GIN, AEtransGAT
 
 from torch_geometric.nn import GAE
 
@@ -435,9 +435,6 @@ def main():
                                          )
             elif args.model == "GAT":
                 model = GAT(num_node_features=input_size, hidden_channels=args.dim_hidden, out_channels=dataset.num_classes)
-
-            elif args.model == "GAT2":
-                model = GAT2(num_node_features=input_size, hidden_channels=args.dim_hidden, out_channels=dataset.num_classes)
             elif args.model == "GCN":
                 model = GCN(num_node_features=input_size, hidden_channels=args.dim_hidden, out_channels=dataset.num_classes)
             elif args.model == "GIN":
