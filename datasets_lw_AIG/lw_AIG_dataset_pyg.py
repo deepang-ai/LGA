@@ -207,7 +207,7 @@ def read_graph_pyg(raw_dir, add_inverse_edge=False, additional_node_files=[], ad
 ##############################
 
 class PygGraphPropPredDataset(InMemoryDataset):
-    def __init__(self, name, root='dataset_lw_AIG', transform=None, pre_transform=None):
+    def __init__(self, name, root='dataset_lw_AIG', transform=None, num_class=2, pre_transform=None):
         #transform：数据转换函数，接收一个Data对象并返回一个转换后的Data对象，在每一次数据获取过程中都会被执行
         #pre_transform：数据转换函数，接收一个Data对象并返回一个转换后的Data对象，在Data对象被保存到文件前调用
         #pre_filter：检查数据是否要保留的函数，它接收一个Data对象，返回此Data对象是否应该被包含在最终的数据集中，在Data对象被保存到文件前调用
@@ -223,7 +223,7 @@ class PygGraphPropPredDataset(InMemoryDataset):
         self.root = osp.join(root, self.dir_name)
         self.task_type = 'multiclass classification'
 
-        self.__num_classes__ = 2
+        self.__num_classes__ = num_class
 
         super(PygGraphPropPredDataset, self).__init__(self.root, transform, pre_transform)
 
@@ -256,19 +256,21 @@ class PygGraphPropPredDataset(InMemoryDataset):
         return 'geometric_data_processed.pt'
 
     def download(self):
-    #下载数据集原始文件到raw_dir文件夹
-        url = self.meta_info['url']
-        if decide_download(url):
-            path = download_url(url, self.original_root)
-            extract_zip(path, self.original_root)
-            os.unlink(path)
-            shutil.rmtree(self.root)
-            shutil.move(osp.join(self.original_root, self.download_name), self.root)
 
-        else:
-            print('Stop downloading.')
-            shutil.rmtree(self.root)
-            exit(-1)
+        pass
+    #下载数据集原始文件到raw_dir文件夹
+        # url = self.meta_info['url']
+        # if decide_download(url):
+        #     path = download_url(url, self.original_root)
+        #     extract_zip(path, self.original_root)
+        #     os.unlink(path)
+        #     shutil.rmtree(self.root)
+        #     shutil.move(osp.join(self.original_root, self.download_name), self.root)
+        #
+        # else:
+        #     print('Stop downloading.')
+        #     shutil.rmtree(self.root)
+        #     exit(-1)
 
 
     def process(self):
