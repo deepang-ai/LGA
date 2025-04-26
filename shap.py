@@ -11,7 +11,7 @@ import argparse
 import numpy as np
 import pandas as pd
 from collections import defaultdict
-
+import shap
 import torch
 from torch import nn, optim
 import torch.nn.functional as F
@@ -27,16 +27,16 @@ from timeit import default_timer as timer
 
 from datasets_lw_AIG.lw_AIG_dataset_pyg import PygGraphPropPredDataset
 from datasets_lw_AIG.lw_AIG_evaluator import Evaluator
-
+import networkx as nx
+from torch_geometric.explain import Explainer,GNNExplainer
+import matplotlib.pyplot as plt
 from functools import partial
 
 from utils import ColumnNormalizeFeatures
 from utils import EarlyStopping
 import torch_geometric.transforms as T
 
-from models import GCN, I2BGNN, GAT, GIN, GAT2, AEtransGAT
-
-from torch_geometric.nn import GAE
+from models import GCN, I2BGNN, GAT, GIN, GAT2, GCNTest
 
 
 
@@ -48,9 +48,9 @@ def load_args():
         description='LGA',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--seed', type=int, help='random seed', default=60)
-    parser.add_argument('--model', type=str, default='LGA', choices=['LGA', 'GCN', 'GAT', 'GIN', 'I2BGNNA', 'I2BGNNT', 'AEtransGAT'],
+    parser.add_argument('--model', type=str, default='LGA', choices=['LGA', 'GCN', 'GAT', 'GIN', 'I2BGNNA', 'I2BGNNT', 'GAT2', 'GCNTest'],
                         help='model choices')
-    parser.add_argument('--dataset', type=str, default="ico_wallets/Volume",
+    parser.add_argument('--dataset', type=str, default="phish_hack/Volume",
                         help='name of dataset')
     parser.add_argument('--num-heads', type=int, default=8, help="number of heads")
     parser.add_argument('--num-layers', type=int, default=2, help="number of layers")
@@ -183,7 +183,7 @@ def train_epoch(model, loader, criterion, optimizer, lr_scheduler, epoch, use_cu
 
         optimizer.zero_grad()
 
-        if args.model == "LGA":
+        if args.model == "LGA:":
             node_reps_v1, graph_reps_v1, pred_out_v1 = model(data_v1)
             node_reps_v2, graph_reps_v2, pred_out_v2 = model(data_v2)
             node_reps, graph_reps, pred_out = model(data_raw)
@@ -192,27 +192,17 @@ def train_epoch(model, loader, criterion, optimizer, lr_scheduler, epoch, use_cu
             loss, loss_self, loss_pred = model.loss_cal(x=graph_reps_v1, x_aug=graph_reps_v2, pred_out=pred_out,
                                                             target=data_raw.y.squeeze(), Lambda=args.Lambda)
         else:
+            node_reps, graph_reps, pred_out = model(data_raw)
+            loss = torch.nn.CrossEntropyLoss()
 
-            if args.model == "AEtransGAT":
-                node_reps, graph_reps, pred_out = model.encoder(data_raw)
-                loss = torch.nn.CrossEntropyLoss()
-                loss1 = loss(pred_out, data_raw.y.squeeze())
-                loss2 = model.recon_loss(node_reps, data_raw.edge_index)
-                loss = 0.6* loss1 + 0.4 *   loss2
-
-
-            else:
-                node_reps, graph_reps, pred_out = model(data_raw)
-                loss = torch.nn.CrossEntropyLoss()
-
-                try:
-                    loss = loss(pred_out, data_raw.y.squeeze())
-                except:
-                    loss = loss(pred_out, torch.tensor([data_raw.y.squeeze()]))
+            try:
+                loss = loss(pred_out, data_raw.y.squeeze())
+            except:
+                loss = loss(pred_out, torch.tensor([data_raw.y.squeeze()]))
 
         loss.backward()
         optimizer.step()
-        if args.model == "LGA":
+        if args.model == "LGA:":
             total_loss += float(loss) * data_raw.num_graphs
             total_loss_pred += float(loss_pred) * data_raw.num_graphs
             total_loss_self += float(loss_self) * data_raw.num_graphs
@@ -229,11 +219,8 @@ def train_epoch(model, loader, criterion, optimizer, lr_scheduler, epoch, use_cu
     epoch_loss = total_loss / len(loader.dataset)
     epoch_loss_pred = total_loss_pred / len(loader.dataset)
     epoch_loss_self = total_loss_self / len(loader.dataset)
-
-    time = toc - tic
-
     print('Train loss: {:.4f};  Loss pred: {:.4f}; Loss self: {:.4f}; time: {:.2f}s'.format(epoch_loss, epoch_loss_pred, epoch_loss_self, toc - tic))
-    return epoch_loss, time
+    return epoch_loss
 
 
 def eval_epoch(model, loader, criterion, use_cuda=False, split='Val'):
@@ -244,18 +231,12 @@ def eval_epoch(model, loader, criterion, use_cuda=False, split='Val'):
     y_true = []
 
     tic = timer()
-
-
     with torch.no_grad():
         for data in loader:
             size = len(data.y)
             if use_cuda:
                 data = data.cuda()
-
-            if args.model == "AEtransGAT":
-                output = model.encode(data)[2]
-            else:
-                output = model(data)[2]
+            output = model(data)[2]
             try:
                 loss = criterion(output, data.y.squeeze())
             except:
@@ -265,9 +246,17 @@ def eval_epoch(model, loader, criterion, use_cuda=False, split='Val'):
             y_pred.append(output.argmax(dim=-1).view(-1, 1).cpu())
 
 
+
+
+
+
+
+
+
+
+
+
             running_loss += loss.item() * size
-
-
 
     toc = timer()
 
@@ -288,12 +277,120 @@ def eval_epoch(model, loader, criterion, use_cuda=False, split='Val'):
 
     # score = evaluator.eval({'y_true': [y_true],
     #                         'y_pred': [y_pred]})['acc']
-
-    time =  toc - tic
-
     print('{} loss: {:.4f} score: {:.4f} time: {:.2f}s'.format(
         split, epoch_loss, score, toc - tic))
-    return precision, recall, accuracy, score, epoch_loss, time
+    return precision, recall, accuracy, score, epoch_loss
+
+
+def final_eval_epoch(model, loader, criterion, use_cuda=False, split='Val'):
+    model.eval()
+
+    running_loss = 0.0
+    y_pred = []
+    y_true = []
+
+    tic = timer()
+    with torch.no_grad():
+
+        all_incorrect_samples = []
+        all_correct_samples = []
+
+        for data in loader:
+            size = len(data.y)
+            if use_cuda:
+                data = data.cuda()
+            output = model(data)[2]
+            try:
+                loss = criterion(output, data.y.squeeze())
+            except:
+                loss = criterion(output, torch.tensor([data.y.squeeze()]))
+
+            y_true.append(data.y.cpu())
+            y_pred.append(output.argmax(dim=-1).view(-1, 1).cpu())
+
+            correct_indices = output.argmax(dim=-1).view(-1, 1).cpu() == data.y.cpu()
+            incorrect_indices = output.argmax(dim=-1).view(-1, 1).cpu() != data.y.cpu()
+
+            incorrect_samples = data[incorrect_indices]
+            correct_samples = data[correct_indices]
+
+            all_incorrect_samples.extend(incorrect_samples)
+            all_correct_samples.extend(correct_samples)
+
+            running_loss += loss.item() * size
+
+
+        for idx, graph in enumerate(all_incorrect_samples):
+
+            G = nx.Graph()
+
+            for i in range(graph.x.size(0)):
+                G.add_node(i, feature=graph.x[i].tolist())
+
+            edge_index = graph.edge_index.t().tolist()  # 转置并转换为列表
+            G.add_edges_from(edge_index)
+            plt.figure(figsize=(10, 10), dpi=80)
+            pos = nx.spring_layout(G)  # 使用spring布局
+            nx.draw(G, pos, node_color='#4E74B4', with_labels=False,  node_size=1200)
+            # 添加标签并指定颜色
+            for i, node in enumerate(G.nodes()):
+                plt.text(pos[node][0], pos[node][1], str(node),
+                         color='white', fontsize=24, ha='center', va='center')
+
+            save_path = os.path.join('./visualization/', args.dataset, 'incorrect')
+
+            if not os.path.exists(save_path):
+                os.makedirs(save_path)
+
+            plt.savefig(save_path + '/' + str(idx) + '.png', transparent=True)
+
+        for idx, graph in enumerate(all_correct_samples):
+
+            G = nx.Graph()
+
+            for i in range(graph.x.size(0)):
+                G.add_node(i, feature=graph.x[i].tolist())
+
+            edge_index = graph.edge_index.t().tolist()  # 转置并转换为列表
+            G.add_edges_from(edge_index)
+            plt.figure(figsize=(10, 10), dpi=80)
+            pos = nx.spring_layout(G)  # 使用spring布局
+            nx.draw(G, pos, node_color='#4E74B4', with_labels=False, node_size=1200)
+            # 添加标签并指定颜色
+            for i, node in enumerate(G.nodes()):
+                plt.text(pos[node][0], pos[node][1], str(node),
+                         color='white', fontsize=24, ha='center', va='center')
+
+            save_path = os.path.join('./visualization/', args.dataset, 'correct')
+
+            if not os.path.exists(save_path):
+                os.makedirs(save_path)
+
+            plt.savefig(save_path + '/' + str(idx) + '.png', transparent=True)
+
+    toc = timer()
+
+
+    y_pred = torch.cat(y_pred).numpy()
+    y_true = torch.cat(y_true).numpy()
+
+
+
+
+    n_sample = len(loader.dataset)
+    epoch_loss = running_loss / n_sample
+    evaluator = Evaluator(name=args.dataset)
+
+    score = f1_score(y_true=y_true, y_pred=y_pred, average='micro')
+    precision = precision_score(y_true, y_pred, average=None)[1]
+    recall = recall_score(y_true, y_pred, average=None)[1]
+    accuracy = f1_score(y_true=y_true, y_pred=y_pred, average=None)[1]
+
+    # score = evaluator.eval({'y_true': [y_true],
+    #                         'y_pred': [y_pred]})['acc']
+    print('{} loss: {:.4f} score: {:.4f} time: {:.2f}s'.format(
+        split, epoch_loss, score, toc - tic))
+    return precision, recall, accuracy, score, epoch_loss
 
 
 def main():
@@ -355,12 +452,6 @@ def main():
     all_precision_list = []
     all_recall_list = []
     final_score_list = []
-
-    total_time_list = []
-    epoch_time_list = []
-    total_epoch_list = []
-
-
     for t in range(args.training_times):
         print("========================training times:{}========================".format(t))
         k_fold_test_precision_list = []
@@ -370,8 +461,6 @@ def main():
 
         for k in range(args.k_ford):
             print("========================k_idx:{}========================".format(k))
-
-
             split_idx = dataset.get_idx_split(X=np.arange(len(dataset)),
                                               Y=np.array([dataset[i].y.item() for i in range(len(dataset))]),
                                               seed=0, K=args.k_ford, k_idx=k, dataset=args.dataset)
@@ -438,6 +527,10 @@ def main():
 
             elif args.model == "GAT2":
                 model = GAT2(num_node_features=input_size, hidden_channels=args.dim_hidden, out_channels=dataset.num_classes)
+
+            elif args.model == "GCNTest":
+                model = GAT2(num_node_features=input_size, hidden_channels=args.dim_hidden, out_channels=dataset.num_classes)
+
             elif args.model == "GCN":
                 model = GCN(num_node_features=input_size, hidden_channels=args.dim_hidden, out_channels=dataset.num_classes)
             elif args.model == "GIN":
@@ -447,8 +540,6 @@ def main():
                 model = I2BGNN(in_channels=input_size, dim=args.dim_hidden, out_channels=dataset.num_classes, which_edge_weight='A')
             elif args.model == "I2BGNNT":
                 model = I2BGNN(in_channels=input_size, dim=args.dim_hidden, out_channels=dataset.num_classes, which_edge_weight='T')
-            elif args.model == "AEtransGAT":
-                model = GAE(AEtransGAT(num_node_features=input_size, num_edge_features=num_edge_features, hidden_channels=args.dim_hidden, out_channels=dataset.num_classes))
 
             print(model)
             if args.use_cuda:
@@ -487,34 +578,12 @@ def main():
             start_time = timer()
 
             early_stopping = EarlyStopping(patience=args.patience, min_delta=args.early_stop_mindelta)
-
-            total_epoch = 0
-
-            elapsed_list = []
-            time_per_graph_list = []
-            speed_list = []
-
             for epoch in range(args.epochs):
                 print("Epoch {}/{}, LR {:.6f}".format(epoch + 1, args.epochs, optimizer.param_groups[0]['lr']))
-                train_loss, train_time = train_epoch(model, train_loader, criterion, optimizer, warmup_lr_scheduler, epoch, args.use_cuda)
-                val_precision, val_recall, val_accuracy, val_score, val_loss, val_time = eval_epoch(model, val_loader, criterion, args.use_cuda, split='Val')
+                train_loss = train_epoch(model, train_loader, criterion, optimizer, warmup_lr_scheduler, epoch, args.use_cuda)
+                val_precision, val_recall, val_accuracy, val_score, val_loss = eval_epoch(model, val_loader, criterion, args.use_cuda, split='Val')
+                test_precision, test_recall, test_accuracy, test_score, test_loss = eval_epoch(model, test_loader, criterion, args.use_cuda, split='Test')
 
-                import time
-                torch.cuda.synchronize()
-                start_time = time.perf_counter()
-                test_precision, test_recall, test_accuracy, test_score, test_loss, test_time = eval_epoch(model, test_loader, criterion, args.use_cuda, split='Test')
-                torch.cuda.synchronize()
-                elapsed = time.perf_counter() - start_time
-
-                elapsed_list.append(elapsed)
-                time_per_graph_list.append(elapsed / len(test_loader.dataset))
-                speed_list.append(len(test_loader.dataset) /elapsed)
-
-
-                epoch_time_list.append(train_time + val_time + test_time)
-
-
-                total_epoch += 1
 
                 if epoch >= args.warmup:
                     lr_scheduler.step()
@@ -564,27 +633,13 @@ def main():
                 else:
                     all_score_list.append(test_score)
 
-
-            print(elapsed_list)
-            print(time_per_graph_list)
-            print(speed_list)
-            print("Elapsed: {}~{}".format(np.mean(elapsed_list), np.std(elapsed_list)))
-            print("Time per graph: {}~{}".format(np.mean(time_per_graph_list), np.std(time_per_graph_list)))
-            print("Speed: {}~{}".format(np.mean(speed_list), np.std(speed_list)))
-
-            total_epoch_list.append(total_epoch)
             total_time = timer() - start_time
-
-            total_time_list.append(total_time)
-
-            print("Total Time: {:.4f}".format(total_time))
-
             print("best val loss: {} test_score: {:.4f}".format(_val_loss , _test_score))
             model.load_state_dict(best_weights)
 
             print()
             print("Testing...")
-            test_precision, test_recall, test_accuracy, test_score, test_loss, test_time = eval_epoch(model, test_loader, criterion, args.use_cuda, split='Test')
+            test_precision, test_recall, test_accuracy, test_score, test_loss = final_eval_epoch(model, test_loader, criterion, args.use_cuda, split='Test')
 
             print("test Score {:.4f}".format(test_score))
 
@@ -606,20 +661,6 @@ def main():
                     {'args': args,
                      'state_dict': best_weights},
                     args.outdir + '/' + args.model + '-' + str(k) + '.pth')
-
-
-
-        print("Epoch Time List:", epoch_time_list)
-        print("Total Epoch List:", total_epoch_list)
-        print("Total Time List:", total_time_list)
-
-
-        print("Epoch Time: {} ~ {}".format(np.mean(epoch_time_list), np.std(epoch_time_list)))
-        print("Total Epoch: {} ~ {}".format(np.mean(total_epoch_list), np.std(total_epoch_list)))
-        print("Total Time: {} ~ {}".format(np.mean(total_time_list), np.std(total_time_list)))
-
-
-
 
         print('k-fold cross validation test score:{} ~ {}'.format(np.mean(k_fold_test_score_list),
                                                                   np.std(k_fold_test_score_list)))

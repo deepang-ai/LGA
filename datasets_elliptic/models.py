@@ -148,6 +148,33 @@ class GAT(torch.nn.Module):
         return x
 
 
+
+class GAT2(torch.nn.Module):
+    def __init__(self, num_node_features, hidden_channels, out_channels, use_skip=False):
+        super(GAT2, self).__init__()
+        self.conv1 = GATConv(num_node_features, hidden_channels)
+        self.conv2 = GATConv(hidden_channels, out_channels)
+        self.use_skip = use_skip
+        if self.use_skip:
+            self.weight = nn.init.xavier_normal_(Parameter(torch.Tensor(num_node_features, 2)))
+
+
+    def forward(self, data):
+        x = self.conv1(data.x, data.edge_index)
+        x = x.relu()
+        x = F.dropout(x, p=0.5, training=self.training)
+        x = self.conv2(x, data.edge_index)
+        if self.use_skip:
+            x = F.softmax(x+torch.matmul(data.x, self.weight), dim=-1)
+        else:
+            x = F.softmax(x, dim=-1)
+        return x
+
+    def embed(self, data):
+        x = self.conv1(data.x, data.edge_index)
+        return x
+
+
 pooling_dict = {'sum': global_add_pool,
                 'mean': global_mean_pool,
                 'max': global_max_pool}
@@ -211,6 +238,7 @@ class LogisticRegressionModel(torch.nn.Module):
     def forward(self, x):
         y_pred = torch.sigmoid(self.linear(x))
         return y_pred
+
 
 
 

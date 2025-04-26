@@ -10,7 +10,7 @@ from torch.nn import Linear, BatchNorm1d, Dropout
 from torch_geometric.nn import global_add_pool, global_max_pool, global_mean_pool
 
 import torch_geometric.nn as gnn
-
+from torch_geometric.nn import GAE
 
 class GIN(nn.Module):
     def __init__(
@@ -125,6 +125,37 @@ class GCN(torch.nn.Module):
         x = self.conv1(data.x, data.edge_index)
         return x
 
+
+class GCNTest(torch.nn.Module):
+    def __init__(self, num_node_features, hidden_channels, out_channels):
+        super(GCNTest, self).__init__()
+        self.conv1 = GCNConv(num_node_features, hidden_channels)
+        self.conv2 = GCNConv(hidden_channels, hidden_channels)
+
+        self.pooling = gnn.global_mean_pool
+
+        self.classifier = nn.Sequential(
+            nn.Linear(hidden_channels, hidden_channels),
+            nn.ReLU(True),
+            nn.Linear(hidden_channels, out_channels)
+        )
+
+    def forward(self, x, edge_index):
+
+        x = self.conv1(x, edge_index)
+        x = x.relu()
+        x = F.dropout(x, p=0.5, training=self.training)
+        x = self.conv2(x, edge_index)
+
+        graph_reps = self.pooling(x)
+
+        return x, graph_reps, self.classifier(graph_reps)
+
+
+    def embed(self, data):
+        x = self.conv1(data.x, data.edge_index)
+        return x
+
 class GAT(torch.nn.Module):
     def __init__(self, num_node_features, hidden_channels, out_channels, use_skip=False):
         super(GAT, self).__init__()
@@ -156,6 +187,46 @@ class GAT(torch.nn.Module):
     def embed(self, data):
         x = self.conv1(data.x, data.edge_index)
         return x
+
+class GATWithEdgeFeatures(torch.nn.Module):
+    def __init__(self, num_node_features, num_edge_features, hidden_channels, num_heads):
+        super(GATWithEdgeFeatures, self).__init__()
+        self.conv1 = GATConv(num_node_features, hidden_channels, heads=num_heads, concat=True, edge_dim=num_edge_features)
+        self.conv2 = GATConv(hidden_channels * num_heads, hidden_channels, heads=1, concat=False, edge_dim=num_edge_features)
+
+    def forward(self, x, edge_index, edge_attr):
+        x = self.conv1(x, edge_index, edge_attr)
+        x = F.elu(x)
+        x = self.conv2(x, edge_index, edge_attr)
+
+        return x
+
+class AEtransGAT(torch.nn.Module):
+    def __init__(self, num_node_features, num_edge_features, hidden_channels, out_channels, num_heads=1):
+        super(AEtransGAT, self).__init__()
+        self.encoder = GATWithEdgeFeatures(num_node_features, num_edge_features, hidden_channels,  num_heads)
+
+        self.classifier = nn.Sequential(
+            nn.Linear(hidden_channels, hidden_channels),
+            nn.ReLU(True),
+            nn.Linear(hidden_channels, out_channels)
+        )
+        self.pooling = gnn.global_mean_pool
+
+    def forward(self, data):
+        x, edge_index, edge_attr, batch = data.x, data.edge_index, data.edge_attr, data.batch
+        x = self.encoder(x, edge_index, edge_attr)
+
+        graph_reps = self.pooling(x, batch)
+
+
+        return x, graph_reps, self.classifier(graph_reps)
+
+    def embed(self, data):
+        x = self.conv1(data.x, data.edge_index)
+        return x
+
+
 
 
 pooling_dict = {'sum': global_add_pool,
