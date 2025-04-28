@@ -36,7 +36,7 @@ import torch_geometric.transforms as T
 
 from models import GCN, I2BGNN, GAT, GIN, AEtransGAT
 
-from torch_geometric.nn import GAE
+
 
 
 

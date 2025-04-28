@@ -276,31 +276,31 @@ class EdgeFeatureGAT(MessagePassing):
         # Compute attention weights based on edge features
         alpha = (x_j * self.att).sum(dim=-1)  # [E, heads]
         alpha = F.leaky_relu(alpha, negative_slope=0.2)
-        alpha = softmax(alpha, index, ptr, size_i)  # [E, heads]
+        alpha = self.EdgeSoftmax(alpha, index, ptr, size_i)  # [E, heads]
         alpha = F.dropout(alpha, p=self.dropout, training=self.training)
 
         return x_j * alpha.unsqueeze(-1)  # [E, heads, out_dim]
 
 
-def softmax(src, index, ptr=None, dim_size=None):
-    """
-    Softmax operation over nodes for each edge
-    """
-    src = src - src.max(dim=0, keepdim=True)[0]
-    exp_src = torch.exp(src)
+    def EdgeSoftmax(self, src, index, ptr=None, dim_size=None):
+        """
+        Softmax operation over nodes for each edge
+        """
+        src = src - src.max(dim=0, keepdim=True)[0]
+        exp_src = torch.exp(src)
 
-    if ptr is not None:
-        # For batched graphs
-        out = torch.zeros_like(exp_src)
-        out.scatter_add_(0, index.unsqueeze(-1).expand_as(exp_src), exp_src)
-        out = out.index_select(0, index)
-    else:
-        # For single graphs
-        out = torch.zeros_like(exp_src)
-        out.scatter_add_(0, index.unsqueeze(-1).expand_as(exp_src), exp_src)
-        out = out.index_select(0, index)
+        if ptr is not None:
+            # For batched graphs
+            out = torch.zeros_like(exp_src)
+            out.scatter_add_(0, index.unsqueeze(-1).expand_as(exp_src), exp_src)
+            out = out.index_select(0, index)
+        else:
+            # For single graphs
+            out = torch.zeros_like(exp_src)
+            out.scatter_add_(0, index.unsqueeze(-1).expand_as(exp_src), exp_src)
+            out = out.index_select(0, index)
 
-    return exp_src / (out + 1e-16)
+        return exp_src / (out + 1e-16)
 
 
 class transGAT(torch.nn.Module):
