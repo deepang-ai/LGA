@@ -253,7 +253,7 @@ def eval_epoch(model, loader, criterion, use_cuda=False, split='Val'):
                 data = data.cuda()
 
             if args.model == "AEtransGAT":
-                output = model.encode(data)[2]
+                output = model.encoder(data)[2]
             else:
                 output = model(data)[2]
             try:
@@ -445,7 +445,8 @@ def main():
             elif args.model == "I2BGNNT":
                 model = I2BGNN(in_channels=input_size, dim=args.dim_hidden, out_channels=dataset.num_classes, which_edge_weight='T')
             elif args.model == "AEtransGAT":
-                model = GAE(AEtransGAT(num_node_features=input_size, num_edge_features=num_edge_features, hidden_channels=args.dim_hidden, out_channels=dataset.num_classes))
+                model = AEtransGAT(num_node_features=input_size, num_edge_features=num_edge_features, hidden_channels=args.dim_hidden, out_channels=dataset.num_classes)
+
 
             print(model)
             if args.use_cuda:
